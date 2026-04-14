@@ -1,6 +1,7 @@
 # ditto runtime state — not source
 /cache/
 /state.json
+/backups/
 
 node_modules/
 
