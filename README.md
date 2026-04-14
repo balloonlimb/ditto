@@ -44,13 +44,40 @@ See [INSTALL.md](INSTALL.md) for prerequisites, manual install, updating, and un
 
 ## How it works
 
-1. `ditto check` — confirms your installed Claude Code matches a published
-   [tweakcc](https://github.com/Piebald-AI/tweakcc) prompt catalog.
-2. The **ditto skill** (in Claude Code) walks you through authoring a variant:
-   picks the highest-impact prompts for your directive, proposes surgical
-   rewrites, saves a JSON.
-3. `ditto apply <name>` — patch → `node cli.js --version` verify →
-   auto-reinstall on failure.
+**You author variants from inside Claude Code.** ditto ships a Claude Code
+skill (installed to `~/.claude/skills/ditto/`) that's triggered by phrases
+like:
+
+- "make claude push back harder"
+- "ditto claude to stop narrating every step"
+- "customize claude to trust me more"
+
+The skill runs a three-phase flow:
+
+1. **Intake.** Runs `ditto check` to confirm your installed Claude Code
+   matches a published [tweakcc](https://github.com/Piebald-AI/tweakcc)
+   prompt catalog, extracts your directive, and loads the prompt list.
+
+2. **Batched walkthrough.** Ranks candidate prompts by impact on your
+   directive and walks you through them 10 at a time. For each, it
+   proposes a surgical rewrite and offers four choices:
+   **Accept** / **Skip** (blacklist this prompt) / **Tweak** (you supply
+   replacement text, the skill polishes it) / **Submit all and finish**.
+   Later batches adapt to your tweak patterns — if you consistently
+   shorten rewrites, subsequent suggestions come in tighter.
+
+3. **Finalize.** Saves your accepted edits as a named variant JSON,
+   previews the diff, and offers to apply.
+
+**Clean split of responsibility:** the skill does the authoring
+intelligence and the human conversation; the CLI (`~/.ditto/bin/ditto`)
+does all the side effects — detect, fetch, patch, verify, reinstall,
+state. The skill shells out to `ditto save`, `ditto diff`, and
+`ditto apply`; nothing ever hand-edits `cli.js`.
+
+You can also drive the CLI directly — `ditto apply smart`,
+`ditto list`, `ditto reinstall` — without invoking the skill at all.
+Use the skill when you're authoring; use the CLI when you're operating.
 
 ## Commands
 
@@ -90,6 +117,8 @@ See [INSTALL.md](INSTALL.md) for prerequisites, manual install, updating, and un
 ├── variants/          # your library
 ├── cache/prompts/     # tweakcc prompts-{version}.json
 └── state.json         # which variant is applied
+
+~/.claude/skills/ditto/  # the authoring skill (installed by install.sh)
 ```
 
 ## Requirements
