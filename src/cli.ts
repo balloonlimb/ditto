@@ -3,8 +3,9 @@ import { detectClaudeCode } from "./detect";
 import { renderPerModDiff } from "./diff";
 import { cachedPromptSetPath, getPromptSet, TweakccNotFoundError } from "./fetch";
 import { ensureDirs, DITTO_HOME } from "./paths";
-import { applyVariantToFile, restoreFromBackup } from "./patch";
+import { applyVariantToFile } from "./patch";
 import { findPromptById, renderPromptAnnotated, summarize } from "./prompts";
+import { reinstallClaudeCode } from "./reinstall";
 import { readState, writeState } from "./state";
 import { listVariants, loadVariant, saveVariant, validateVariantName, validateVariantShape } from "./variants";
 import { verifyCliJs } from "./verify";
@@ -26,8 +27,8 @@ async function main(): Promise<void> {
         return await cmdDiff(rest);
       case "apply":
         return await cmdApply(rest);
-      case "restore":
-        return await cmdRestore();
+      case "reinstall":
+        return await cmdReinstall();
       case "list":
         return cmdList();
       case "status":
@@ -62,8 +63,8 @@ function cmdHelp(): void {
     "  save <name> [--stdin|--file path]",
     "                               Save a variant JSON",
     "  diff <name>                  Show per-modification diff of a variant",
-    "  apply <name>                 Backup cli.js → apply variant → verify → update state",
-    "  restore                      Restore cli.js from the most recent backup",
+    "  apply <name>                 Apply variant → verify → update state (reinstalls on switch/failure)",
+    "  reinstall                    npm reinstall the current Claude Code version to return to pristine",
     "  list                         List saved variants; mark which is applied",
     "  status                       Summarize Claude Code / tweakcc / applied variant",
     "  help                         This help",
@@ -177,10 +178,15 @@ async function cmdApply(rest: string[]): Promise<void> {
 
   const state = readState();
 
-  // If a different variant is currently applied, restore first so we start from pristine.
-  if (state.appliedVariant && state.appliedVariant !== variant.name && state.lastBackupPath && existsSync(state.lastBackupPath)) {
-    restoreFromBackup(det.cliJs, state.lastBackupPath);
-    process.stdout.write(`(pre-apply: restored pristine cli.js from ${state.lastBackupPath})\n`);
+  // If a different variant is currently applied, reinstall to get pristine cli.js first.
+  if (state.appliedVariant && state.appliedVariant !== variant.name) {
+    process.stdout.write(`(pre-apply: reinstalling Claude Code ${det.version} to clear ${state.appliedVariant})\n`);
+    const r = reinstallClaudeCode(det.version);
+    if (!r.ok) {
+      process.stderr.write(`pre-apply reinstall failed (${r.code}): ${r.command}\n`);
+      if (r.stderr) process.stderr.write(r.stderr + "\n");
+      process.exit(1);
+    }
   }
 
   const result = applyVariantToFile(det.cliJs, variant);
@@ -189,24 +195,32 @@ async function cmdApply(rest: string[]): Promise<void> {
   if (!verdict.ok) {
     process.stderr.write(`verify failed: node cli.js --version exited ${verdict.code}\n`);
     if (verdict.stderr) process.stderr.write(verdict.stderr + "\n");
-    restoreFromBackup(det.cliJs, result.backupPath);
-    process.stderr.write(`restored cli.js from ${result.backupPath}\n`);
+    process.stderr.write(`reinstalling Claude Code ${det.version} to recover...\n`);
+    const r = reinstallClaudeCode(det.version);
+    if (!r.ok) {
+      process.stderr.write(`recovery reinstall failed (${r.code}): ${r.command}\n`);
+      if (r.stderr) process.stderr.write(r.stderr + "\n");
+    } else {
+      process.stderr.write(`restored cli.js via ${r.command}\n`);
+    }
+    writeState({
+      appliedVariant: null,
+      appliedAt: null,
+      claudeCodeVersion: det.version,
+    });
     process.exit(1);
   }
 
-  const next = {
+  writeState({
     appliedVariant: variant.name,
-    lastBackupPath: state.appliedVariant === variant.name && state.lastBackupPath ? state.lastBackupPath : result.backupPath,
     appliedAt: new Date().toISOString(),
     claudeCodeVersion: det.version,
-  };
-  writeState(next);
+  });
 
   process.stdout.write(
     `applied ${variant.name}: +${result.applied} replaced, ${result.alreadyApplied} already, ${result.skipped} not found\n`,
   );
   process.stdout.write(`verified: ${verdict.stdout.trim()}\n`);
-  process.stdout.write(`backup: ${next.lastBackupPath}\n`);
 
   if (result.skipped) {
     for (const r of result.reports) {
@@ -217,29 +231,31 @@ async function cmdApply(rest: string[]): Promise<void> {
   }
 }
 
-async function cmdRestore(): Promise<void> {
+async function cmdReinstall(): Promise<void> {
   const det = detectClaudeCode();
-  const state = readState();
-  if (!state.lastBackupPath || !existsSync(state.lastBackupPath)) {
-    throw new Error(
-      `no backup to restore from in state.json (${state.lastBackupPath ?? "null"}).\n` +
-        `run  ditto status  to inspect`,
-    );
+  process.stdout.write(`reinstalling Claude Code ${det.version}...\n`);
+  const r = reinstallClaudeCode(det.version);
+  if (!r.ok) {
+    process.stderr.write(`reinstall failed (${r.code}): ${r.command}\n`);
+    if (r.stderr) process.stderr.write(r.stderr + "\n");
+    process.exit(1);
   }
-  restoreFromBackup(det.cliJs, state.lastBackupPath);
-  const verdict = verifyCliJs(det.cliJs);
+  if (r.stdout.trim()) process.stdout.write(r.stdout);
+
+  const after = detectClaudeCode();
+  const verdict = verifyCliJs(after.cliJs);
   if (!verdict.ok) {
-    process.stderr.write(`warning: restored cli.js failed --version check (${verdict.code}): ${verdict.stderr}\n`);
+    process.stderr.write(`warning: reinstalled cli.js failed --version check (${verdict.code}): ${verdict.stderr}\n`);
+  } else {
+    process.stdout.write(`verified: ${verdict.stdout.trim()}\n`);
   }
-  process.stdout.write(`restored cli.js from ${state.lastBackupPath}\n`);
-  if (verdict.ok) process.stdout.write(`verified: ${verdict.stdout.trim()}\n`);
 
   writeState({
     appliedVariant: null,
-    lastBackupPath: null,
     appliedAt: null,
-    claudeCodeVersion: det.version,
+    claudeCodeVersion: after.version,
   });
+  process.stdout.write(`Claude Code ${after.version} is now pristine (${after.cliJs})\n`);
 }
 
 function cmdList(): void {
@@ -275,7 +291,6 @@ function cmdStatus(): void {
 
   process.stdout.write(`applied variant: ${state.appliedVariant ?? "(none)"}\n`);
   if (state.appliedAt) process.stdout.write(`applied at: ${state.appliedAt}\n`);
-  if (state.lastBackupPath) process.stdout.write(`last backup: ${state.lastBackupPath}\n`);
   process.stdout.write(`ditto home: ${DITTO_HOME}\n`);
 }
 

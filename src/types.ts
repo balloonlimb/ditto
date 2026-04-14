@@ -41,7 +41,6 @@ export interface Variant {
 
 export interface State {
   appliedVariant: string | null;
-  lastBackupPath: string | null;
   appliedAt: string | null;
   claudeCodeVersion: string | null;
 }

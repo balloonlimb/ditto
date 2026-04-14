@@ -1,5 +1,15 @@
 # Changelog — ditto CLI
 
+## 2026-04-14
+
+- **Remove laptop-path references** (session — per user). The repo ships to
+  other machines; it shouldn't reference the original author's filesystem.
+  Dropped the `PATCHER_LOCAL_PROMPTS_DIR` constant from `src/paths.ts` and the
+  offline-seed fallback branch (plus its unused `silent?` option and
+  `copyFileSync` import) from `src/fetch.ts`. Scrubbed `~/DIY/AI/patcher/`
+  pointers from `CONTRIBUTORS.md`. Historical entries in this changelog
+  preserved as record.
+
 ## 2026-04-13
 
 - **Add `INSTALL.md` + `install.sh` for one-liner curl install** (session —

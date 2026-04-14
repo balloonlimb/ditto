@@ -1,6 +1,6 @@
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { PATCHER_LOCAL_PROMPTS_DIR, PROMPT_CACHE_DIR, ensureDirs } from "./paths";
+import { PROMPT_CACHE_DIR, ensureDirs } from "./paths";
 import type { TweakccPromptSet } from "./types";
 
 const TWEAKCC_RAW_BASE =
@@ -27,7 +27,7 @@ export function cachedPromptSetPath(version: string): string {
 
 export async function getPromptSet(
   version: string,
-  opts?: { force?: boolean; silent?: boolean },
+  opts?: { force?: boolean },
 ): Promise<TweakccPromptSet> {
   ensureDirs();
   const cachePath = cachedPromptSetPath(version);
@@ -35,14 +35,6 @@ export async function getPromptSet(
   if (!opts?.force && existsSync(cachePath)) {
     const data = JSON.parse(readFileSync(cachePath, "utf8")) as TweakccPromptSet;
     return data;
-  }
-
-  // Also try the patcher's local copy as an offline fallback (one-time seed into cache).
-  const localSeed = path.join(PATCHER_LOCAL_PROMPTS_DIR, `prompts-${version}.json`);
-  if (!opts?.force && existsSync(localSeed)) {
-    copyFileSync(localSeed, cachePath);
-    if (!opts?.silent) console.error(`(seeded cache from ${localSeed})`);
-    return JSON.parse(readFileSync(cachePath, "utf8")) as TweakccPromptSet;
   }
 
   const url = `${TWEAKCC_RAW_BASE}/prompts-${version}.json`;

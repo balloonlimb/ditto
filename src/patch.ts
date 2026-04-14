@@ -1,6 +1,4 @@
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import { BACKUPS_DIR } from "./paths";
+import { readFileSync, writeFileSync } from "node:fs";
 import type { Variant, VariantModification } from "./types";
 
 export interface ModReport {
@@ -10,7 +8,6 @@ export interface ModReport {
 }
 
 export interface PatchResult {
-  backupPath: string;
   applied: number;
   skipped: number;
   alreadyApplied: number;
@@ -59,29 +56,14 @@ export function applyModsToString(src: string, mods: VariantModification[]): {
   return { src: out, reports, applied, skipped, alreadyApplied };
 }
 
-export function backupCliJs(cliJs: string, tag = ""): string {
-  mkdirSync(BACKUPS_DIR, { recursive: true });
-  const ts = new Date().toISOString().replace(/[:.]/g, "-");
-  const suffix = tag ? `.${tag}` : "";
-  const backupPath = path.join(BACKUPS_DIR, `cli.js.${ts}${suffix}.backup`);
-  copyFileSync(cliJs, backupPath);
-  return backupPath;
-}
-
-export function applyVariantToFile(cliJs: string, variant: Variant, opts?: { tag?: string }): PatchResult {
-  const backupPath = backupCliJs(cliJs, opts?.tag ?? variant.name);
+export function applyVariantToFile(cliJs: string, variant: Variant): PatchResult {
   const src = readFileSync(cliJs, "utf8");
   const result = applyModsToString(src, variant.modifications);
   writeFileSync(cliJs, result.src, "utf8");
   return {
-    backupPath,
     applied: result.applied,
     skipped: result.skipped,
     alreadyApplied: result.alreadyApplied,
     reports: result.reports,
   };
-}
-
-export function restoreFromBackup(cliJs: string, backupPath: string): void {
-  copyFileSync(backupPath, cliJs);
 }

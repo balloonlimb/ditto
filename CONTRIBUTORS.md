@@ -10,8 +10,9 @@
 File plumbing for the companion skill at `~/.claude/skills/ditto/`. The skill
 does the human-facing authoring; this CLI does all the side-effectful work:
 detect the installed Claude Code, fetch/cache the matching tweakcc prompt
-catalog, parse variant JSONs, diff / apply / verify / restore against
-`cli.js` with timestamped backups, and track state.
+catalog, parse variant JSONs, diff / apply / verify against `cli.js`, and
+track state. Recovery is done by reinstalling the current version via
+`npm install -g @anthropic-ai/claude-code@<version>` — no local backup files.
 
 ## Key design decisions
 
@@ -22,30 +23,37 @@ catalog, parse variant JSONs, diff / apply / verify / restore against
   `{promptId, pieceIndex, originalText, newText}` — a specific substring in a
   specific piece of a specific prompt. Makes edits survivable across minor
   Claude Code version drift.
-- **Ported patcher's apply flow.** Reuses the proven split/join replacement,
-  "already applied" idempotency check, and post-apply `--version` sanity check
-  from `~/DIY/AI/patcher/patch-claude-code.sh`.
-- **Fetch with cache + local fallback.** `getPromptSet(version)` checks
-  `~/.ditto/cache/prompts/`, then `~/DIY/AI/patcher/prompts-{version}.json`,
-  then fetches from tweakcc on GitHub raw. Cache survives offline use.
+- **Ported apply flow from a predecessor patch script.** Reuses the proven
+  split/join replacement, "already applied" idempotency check, and post-apply
+  `--version` sanity check.
+- **Fetch with cache.** `getPromptSet(version)` checks
+  `~/.ditto/cache/prompts/` first, then fetches from tweakcc on GitHub raw.
+  Cache survives offline use.
 - **Strict-fail on version mismatch.** If tweakcc has no matching
   `prompts-{version}.json`, `ditto check` exits non-zero with an actionable
   message (latest tweakcc version + downgrade command). The skill relays this
   and stops.
 - **`smart` ships as a committed default.** `variants/smart.json` is checked
-  in as a shipped artifact — the patcher's original opinions (quality > speed,
+  in as a shipped artifact — the original 13 opinions (quality > speed,
   judgment > rules) mapped to `{promptId, pieceIndex}` edits for the pinned
   tweakcc version. Users get it for free via `ditto apply smart`; it evolves
-  through the ditto skill or hand edits to the JSON, not by re-running a
-  shell-script reverse-engineer step.
+  through the ditto skill or hand edits to the JSON.
 
 ## Layout
 
 - `bin/ditto` — `#!/usr/bin/env bun` shim to `src/cli.ts`.
 - `src/` — one module per concern (detect, fetch, prompts, patch, variants,
-  diff, verify, state, paths, types, cli).
+  diff, verify, reinstall, state, paths, types, cli).
 - `variants/` — user's named variant JSONs (ships with `smart.json` as a
   committed default).
 - `cache/prompts/` — cached `prompts-{version}.json` files.
-- `backups/` — timestamped cli.js backups.
-- `state.json` — tracks currently-applied variant + last backup path.
+- `state.json` — tracks currently-applied variant.
+
+## Recovery model
+
+No backup files. `ditto reinstall` shells out to `npm install -g
+@anthropic-ai/claude-code@<current-version>` to get a pristine `cli.js`.
+`ditto apply` also reinstalls implicitly when switching variants and as
+the recovery path when post-apply `--version` verification fails. Manual
+unsaved edits to `cli.js` are intentionally not preserved — if you want
+to keep a change, save it as a variant first.

@@ -4,7 +4,6 @@ import type { State } from "./types";
 
 const defaults: State = {
   appliedVariant: null,
-  lastBackupPath: null,
   appliedAt: null,
   claudeCodeVersion: null,
 };
@@ -13,7 +12,8 @@ export function readState(): State {
   if (!existsSync(STATE_FILE)) return { ...defaults };
   try {
     const raw = JSON.parse(readFileSync(STATE_FILE, "utf8")) as Partial<State>;
-    return { ...defaults, ...raw };
+    const { appliedVariant, appliedAt, claudeCodeVersion } = { ...defaults, ...raw };
+    return { appliedVariant, appliedAt, claudeCodeVersion };
   } catch {
     return { ...defaults };
   }

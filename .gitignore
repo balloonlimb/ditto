@@ -1,5 +1,4 @@
 # ditto runtime state — not source
-/backups/
 /cache/
 /state.json
 
