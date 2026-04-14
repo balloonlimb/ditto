@@ -2,6 +2,10 @@
 
 ## 2026-04-13
 
+- **Fix TS types** (session — user-reported error).
+  - Replaced deprecated `bun-types` with `@types/bun@^1.3.12` in
+    devDependencies; updated `tsconfig.json` `types` array from
+    `"bun-types"` → `"bun"`. `bunx tsc --noEmit` now clean.
 - **Initial version** (session — per user's implementation plan).
   - Bun + TypeScript, zero runtime deps.
   - Subcommands: `check`, `prompts`, `show`, `save`, `diff`, `apply`, `restore`,
