@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "sk": true,
   "description": "Directive-driven Claude Code prompt modification, with named variants",
   "bin": {
     "ditto": "bin/ditto"
@@ -16,5 +17,8 @@
   "devDependencies": {
     "@types/bun": "^1.3.12",
     "@types/node": "^25.6.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^2.1.108"
   }
 }
